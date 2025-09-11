@@ -12,6 +12,7 @@ def main():
     port = int(os.getenv("RASPBERRY_PI_PORT", 22))
     username = os.getenv("RASPBERRY_PI_USER", "username")
     password = os.getenv("RASPBERRY_PI_PASSWORD", "password")
+    rasp_prompt = os.getenv("RASP_PROMPT", "|=> ")
 
     ssh_service = SSHConnectionServices(hostname=hostname, port=port, username=username, password=password)
     
@@ -20,8 +21,19 @@ def main():
         print(f"Connected to {hostname}:{port} as {username}")
         
         stdin, stdout, stderr = ssh_client.exec_command("ls -l")
-        print("Command output:")
+        print(f"\n{rasp_prompt}ls -l")
         print(stdout.read().decode())
+
+        while True:
+            command = input(rasp_prompt)
+            if command.lower() in ['.exit', '.quit']:
+                print("Exiting...")
+                break
+            stdin, stdout, stderr = ssh_client.exec_command(command)
+            print(stdout.read().decode())
+            err = stderr.read().decode()
+            if err:
+                print(f"Error: {err}")
         
     except Exception as e:
         print(f"An error occurred: {e}")
