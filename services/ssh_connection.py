@@ -1,3 +1,4 @@
+import os
 import paramiko
 
 class SSHConnectionServices:
@@ -20,6 +21,13 @@ class SSHConnectionServices:
         self.ssh = ssh
         return ssh
     
+    def ssh_send_command(self, command: str) -> tuple:
+        if self.ssh:
+            stdin, stdout, stderr = self.ssh.exec_command(command)
+            return stdin, stdout, stderr
+        else:
+            raise Exception("SSH connection not established. Please connect first.")
+    
     def shh_disconnect(self) -> None:
         if self.ssh:
             self.ssh.close()
@@ -27,4 +35,18 @@ class SSHConnectionServices:
             return 0
         else:
             return 1
+        
+    def get_file(self, filename: str, rasp_dir: str, local_dir: str) -> str:
+        remote_file = f"{rasp_dir}/{filename}"
+        local_file  = os.path.join(local_dir, filename)
+
+        if self.ssh is not None:
+            try:
+                sftp = self.ssh.open_sftp()
+                os.makedirs(local_dir, exist_ok=True)
+                sftp.get(remote_file, local_file)
+                sftp.close()
+                return f"Archivo '{filename}' descargado a '{local_file}'"
+            except Exception as e:
+                return f"Error al descargar archivo [{remote_file}]: {e}"
     
