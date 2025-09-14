@@ -50,3 +50,13 @@ class SSHConnectionServices:
             except Exception as e:
                 return f"Error al descargar archivo [{remote_file}]: {e}"
     
+    def get_current_directory(self) -> str:
+        if self.ssh:
+            try:
+                stdin, stdout, stderr = self.ssh.exec_command("pwd")
+                current_dir = stdout.read().decode().strip()
+                return current_dir if current_dir else "~"
+            except Exception:
+                return "~"
+        return "~"
+    

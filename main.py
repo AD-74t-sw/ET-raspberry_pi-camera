@@ -1,9 +1,12 @@
 import os
 import time
 import dotenv
+from colorama import init
 
 from services.ssh_connection import SSHConnectionServices
 from services.command_recognition import CommandRecognitionService
+from services.terminal_interface import TerminalInterface
+from services.helper import HelperServices
 
 
 dotenv.load_dotenv()
@@ -14,48 +17,68 @@ def main():
     port    = int(os.getenv("RASPBERRY_PI_PORT", 22))
     username    = os.getenv("RASPBERRY_PI_USER", "username")
     password    = os.getenv("RASPBERRY_PI_PASSWORD", "password")
-    rasp_prompt = os.getenv("RASP_PROMPT", "|et=> ")
     remote_path = os.environ.get("RASPBERRY_PI_IMAGES_PATH", "/home/raspberry-et/Pictures")
     local_path  = os.environ.get("LOCAL_IMAGES_PATH", "./images")
+
+    terminal = TerminalInterface(username, hostname)
 
     ssh_service = SSHConnectionServices(hostname=hostname, port=port, username=username, password=password)
     
     try:
         ssh_client = ssh_service.ssh_connect()
-        print(f"Connected to {hostname}:{port} as {username}")
+        terminal.print_success(f"Connected to {hostname}:{port} as {username}")
+        
+        current_dir = ssh_service.get_current_directory()
+        terminal.update_directory(current_dir)
         
         stdin, stdout, stderr = ssh_client.exec_command("ls")
-        print(f"\n{rasp_prompt}ls")
         print(stdout.read().decode())
 
-        print("Intenta --help para obtener ayuda sobre comandos\n")
+        terminal.print_info("Intenta --help para obtener ayuda sobre comandos\n")
 
         while True:
             filename = None
-            command = input(f"{rasp_prompt}")
+            command = input(terminal.get_prompt())
+            
             if command.lower() in ['.exit', '.quit']:
-                print("Exiting...")
+                terminal.print_info("Exiting...")
                 break
-            command, filename = CommandRecognitionService.recognize_and_transform(command, ssh_service)
-            stdin, stdout, stderr = ssh_service.ssh_send_command(command)
-            print(stdout.read().decode())
-            err = stderr.read().decode()
+                
+            if command.lower() == "--help":
+                HelperServices.main_help()
+                continue
+            
+            if command.strip():
+                command, filename = CommandRecognitionService.recognize_and_transform(command, ssh_service)
+                stdin, stdout, stderr = ssh_service.ssh_send_command(command)
+                
+                output = stdout.read().decode()
+                error = stderr.read().decode()
+                
+                print(output)
+            
+                if command.strip().startswith('cd'):
+                    time.sleep(0.5)
+                    current_dir = ssh_service.get_current_directory()
+                    terminal.update_directory(current_dir)
 
-            time.sleep(5)
-            if filename:
-                print(ssh_service.get_file(filename, remote_path, local_path))
-            if err:
-                print(f"Error: {err}")
+                if filename:
+                    time.sleep(5)
+                    download_result = ssh_service.get_file(filename, remote_path, local_path)
+                    terminal.print_success(download_result)
+                    
+                if error:
+                    terminal.print_error(error)
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        terminal.print_error(f"An error occurred: {e}")
     
     finally:
         disconnect_status = ssh_service.shh_disconnect()
         if disconnect_status == 0:
-            print("Disconnected successfully.")
+            terminal.print_success("Disconnected successfully.")
         else:
-            print("No active connection to disconnect.")
+            terminal.print_info("No active connection to disconnect.")
 
 if __name__ == "__main__":
     main()
